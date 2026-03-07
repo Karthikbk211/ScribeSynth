@@ -124,7 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('--stable_dif_path', type=str,
                         default='runwayml/stable-diffusion-v1-5')
     parser.add_argument('--cfg', dest='cfg_file',
-                        default='configs/CVL_finetune.yml')
+                        default='configs/IAM_finetune.yml')
     parser.add_argument('--pretrained', default='',
                         help='pretrained ScribeSynth model path')
     parser.add_argument('--ocr_model', dest='ocr_model',

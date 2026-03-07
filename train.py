@@ -106,7 +106,7 @@ if __name__ == '__main__':
     parser.add_argument('--stable_dif_path', type=str,
                         default='runwayml/stable-diffusion-v1-5')
     parser.add_argument('--cfg', dest='cfg_file',
-                        default='configs/CVL_scratch.yml')
+                        default='configs/IAM_scratch.yml')
     parser.add_argument('--pretrained', default='', help='pretrained model path')
     parser.add_argument('--noise_offset', default=0, type=float)
     parser.add_argument('--device', type=str, default='cuda')
