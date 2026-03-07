@@ -11,7 +11,7 @@ ScribeSynth is inspired by one-shot diffusion based handwriting generation. It e
 - **Sentence-level generation** — supports full sentences instead of just words
 - **Learnable high-frequency filter** — replaces the fixed Laplacian kernel with a trainable CNN that learns what stroke details are most useful for style capture
 - **Style confidence score** — outputs a confidence score indicating how well the generated handwriting matches the input style
-- **CVL dataset support** — trained on the openly accessible CVL dataset
+- **IAM dataset support** — trained on the IAM handwriting dataset
 
 ---
 

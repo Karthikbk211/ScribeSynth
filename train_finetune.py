@@ -12,7 +12,7 @@ from diffusers import AutoencoderKL
 import logging
 
 from parse_config import cfg, cfg_from_file, assert_and_infer_cfg
-from dataset.loader import CVLDataset, letters
+from dataset.loader import IAMDataset, letters
 from engine.trainer import Trainer
 from network.generator import ScribeSynthGenerator
 from network.diffusion import Diffusion
@@ -37,7 +37,7 @@ def main(opt):
     torch.cuda.set_device(local_rank)
     device = torch.device(opt.device, local_rank)
 
-    train_dataset = CVLDataset(
+    train_dataset = IAMDataset(
         cfg.DATA_LOADER.IMAGE_PATH,
         cfg.DATA_LOADER.STYLE_PATH,
         cfg.DATA_LOADER.FREQ_PATH,
@@ -54,7 +54,7 @@ def main(opt):
         pin_memory=True,
         sampler=train_sampler)
 
-    test_dataset = CVLDataset(
+    test_dataset = IAMDataset(
         cfg.DATA_LOADER.IMAGE_PATH,
         cfg.DATA_LOADER.STYLE_PATH,
         cfg.DATA_LOADER.FREQ_PATH,

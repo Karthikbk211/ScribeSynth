@@ -1,6 +1,6 @@
 import argparse
 from parse_config import cfg, cfg_from_file, assert_and_infer_cfg
-from dataset.loader import CVLDataset
+from dataset.loader import IAMDataset
 import torch
 from engine.trainer import Trainer
 from network.generator import ScribeSynthGenerator
@@ -33,7 +33,7 @@ def main(opt):
     torch.cuda.set_device(local_rank)
     device = torch.device(opt.device, local_rank)
 
-    train_dataset = CVLDataset(
+    train_dataset = IAMDataset(
         cfg.DATA_LOADER.IMAGE_PATH,
         cfg.DATA_LOADER.STYLE_PATH,
         cfg.DATA_LOADER.FREQ_PATH,
@@ -50,7 +50,7 @@ def main(opt):
         pin_memory=True,
         sampler=train_sampler)
 
-    test_dataset = CVLDataset(
+    test_dataset = IAMDataset(
         cfg.DATA_LOADER.IMAGE_PATH,
         cfg.DATA_LOADER.STYLE_PATH,
         cfg.DATA_LOADER.FREQ_PATH,

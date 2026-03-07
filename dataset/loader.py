@@ -11,8 +11,8 @@ import cv2
 from einops import rearrange
 
 text_path = {
-    'train': 'data/CVL_train.txt',
-    'test':  'data/CVL_test.txt'
+    'train': 'data/IAM_train.txt',
+    'test':  'data/IAM_test.txt'
 }
 
 generate_type = {
@@ -26,7 +26,7 @@ letters = '_Only thewigsofrcvdampbkuq.A-210xT5\'MDL,RYHJ"ISPWENj&BC93VGFKz();#:!
 style_len = 352
 
 
-class CVLDataset(Dataset):
+class IAMDataset(Dataset):
     def __init__(self, image_path, style_path, freq_path, type,
                  content_type='unifont', max_len=32):
         self.max_len = max_len
@@ -178,7 +178,7 @@ class CVLDataset(Dataset):
         }
 
 
-class Random_StyleCVLDataset(CVLDataset):
+class Random_StyleIAMDataset(IAMDataset):
     def __init__(self, style_path, freq_path, ref_num):
         self.style_path = style_path
         self.freq_path = freq_path
@@ -232,7 +232,7 @@ class Random_StyleCVLDataset(CVLDataset):
         return {'style': style_ref, 'freq': freq_ref, 'wid': wid_list}
 
 
-class ContentData(CVLDataset):
+class ContentData(IAMDataset):
     def __init__(self, content_type='unifont'):
         self.letters = letters
         self.letter2index = {label: n for n, label in enumerate(self.letters)}

@@ -8,7 +8,7 @@ import random
 import numpy as np
 
 from parse_config import cfg, cfg_from_file, assert_and_infer_cfg
-from dataset.loader import Random_StyleCVLDataset, ContentData, generate_type
+from dataset.loader import Random_StyleIAMDataset, ContentData, generate_type
 from network.generator import ScribeSynthGenerator
 from network.diffusion import Diffusion
 from diffusers import AutoencoderKL
@@ -43,7 +43,7 @@ def main(opt):
 
     temp_texts = texts[dist.get_rank() * each_process:(dist.get_rank() + 1) * each_process]
 
-    style_dataset = Random_StyleCVLDataset(
+    style_dataset = Random_StyleIAMDataset(
         os.path.join(cfg.DATA_LOADER.STYLE_PATH, generate_type[opt.generate_type][0]),
         os.path.join(cfg.DATA_LOADER.FREQ_PATH, generate_type[opt.generate_type][0]),
         len(temp_texts))
