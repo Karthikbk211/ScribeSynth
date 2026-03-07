@@ -1,0 +1,23 @@
+name: scribesynth
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch=2.0.1
+  - torchvision=0.15.2
+  - torchaudio=2.0.2
+  - pytorch-cuda=11.7
+  - pip
+  - pip:
+    - diffusers==0.16.1
+    - transformers==4.30.2
+    - einops==0.6.1
+    - easydict==1.10
+    - opencv-python==4.7.0.72
+    - tqdm==4.65.0
+    - pyyaml==6.0
+    - numpy==1.24.3
+    - Pillow==9.5.0
+    - accelerate==0.20.3

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Data
+data/
+*.lmdb/
+*.mdb
+
+# Model checkpoints
+checkpoints/
+model_zoo/
+*.pth
+*.pt
+*.ckpt
+
+# Generated outputs
+Generated/
+output/
+samples/
+
+# Logs
+*.log
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Environment
+.env
+*.env
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
