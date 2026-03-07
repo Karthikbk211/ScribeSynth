@@ -24,12 +24,14 @@ def default(val, d):
 def timestep_embedding(timesteps, dim, max_period=10000):
     half = dim // 2
     freqs = torch.exp(
-        -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
+        -math.log(max_period) * torch.arange(start=0,
+                                             end=half, dtype=torch.float32) / half
     ).to(device=timesteps.device)
     args = timesteps[:, None].float() * freqs[None]
     embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
     if dim % 2:
-        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+        embedding = torch.cat(
+            [embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     return embedding
 
 
@@ -53,7 +55,8 @@ class CheckpointFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, *output_grads):
-        ctx.input_tensors = [x.float().detach().requires_grad_(True) for x in ctx.input_tensors]
+        ctx.input_tensors = [x.float().detach().requires_grad_(True)
+                             for x in ctx.input_tensors]
         with torch.enable_grad():
             shallow_copies = [x.view_as(x) for x in ctx.input_tensors]
             output_tensors = ctx.run_function(*shallow_copies)
@@ -77,9 +80,12 @@ def zero_module(module):
 
 
 def conv_nd(dims, *args, **kwargs):
-    if dims == 1: return nn.Conv1d(*args, **kwargs)
-    if dims == 2: return nn.Conv2d(*args, **kwargs)
-    if dims == 3: return nn.Conv3d(*args, **kwargs)
+    if dims == 1:
+        return nn.Conv1d(*args, **kwargs)
+    if dims == 2:
+        return nn.Conv2d(*args, **kwargs)
+    if dims == 3:
+        return nn.Conv3d(*args, **kwargs)
     raise ValueError(f"unsupported dimensions: {dims}")
 
 
@@ -118,7 +124,8 @@ class Upsample(nn.Module):
         self.use_conv = use_conv
         self.dims = dims
         if use_conv:
-            self.conv = nn.Conv2d(self.channels, self.out_channels, 3, padding=padding)
+            self.conv = nn.Conv2d(
+                self.channels, self.out_channels, 3, padding=padding)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -137,7 +144,8 @@ class Downsample(nn.Module):
         self.dims = dims
         stride = 2 if dims != 3 else (1, 2, 2)
         if use_conv:
-            self.op = nn.Conv2d(self.channels, self.out_channels, 3, stride=stride, padding=padding)
+            self.op = nn.Conv2d(self.channels, self.out_channels,
+                                3, stride=stride, padding=padding)
         else:
             assert self.channels == self.out_channels
             self.op = nn.AvgPool2d(dims, kernel_size=stride, stride=stride)
@@ -185,13 +193,15 @@ class ResBlock(TimestepBlock):
             normalization(self.out_channels),
             nn.SiLU(),
             nn.Dropout(p=dropout),
-            zero_module(nn.Conv2d(self.out_channels, self.out_channels, 3, padding=1)),
+            zero_module(nn.Conv2d(self.out_channels,
+                        self.out_channels, 3, padding=1)),
         )
 
         if self.out_channels == channels:
             self.skip_connection = nn.Identity()
         elif use_conv:
-            self.skip_connection = nn.Conv2d(channels, self.out_channels, 3, padding=1)
+            self.skip_connection = nn.Conv2d(
+                channels, self.out_channels, 3, padding=1)
         else:
             self.skip_connection = nn.Conv2d(channels, self.out_channels, 1)
 
@@ -267,7 +277,8 @@ class QKVAttention(nn.Module):
             (k * scale).view(bs * self.n_heads, ch, length),
         )
         weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
-        a = torch.einsum("bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length))
+        a = torch.einsum("bts,bcs->bct", weight,
+                         v.reshape(bs * self.n_heads, ch, length))
         return a.reshape(bs, -1, length)
 
 
@@ -311,7 +322,8 @@ class ScribeSynthGenerator(nn.Module):
         self.mixer = StyleContentMixer(d_model=context_dim)
 
         self.input_blocks = nn.ModuleList([
-            TimestepEmbedSequential(conv_nd(dims, in_channels, model_channels, 3, padding=1))
+            TimestepEmbedSequential(
+                conv_nd(dims, in_channels, model_channels, 3, padding=1))
         ])
         self._feature_size = model_channels
         input_block_chans = [model_channels]
@@ -383,7 +395,8 @@ class ScribeSynthGenerator(nn.Module):
                         ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim))
                 if level and i == num_res_blocks:
                     out_ch = ch
-                    layers.append(Upsample(ch, conv_resample, dims=dims, out_channels=out_ch))
+                    layers.append(Upsample(ch, conv_resample,
+                                  dims=dims, out_channels=out_ch))
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
                 self._feature_size += ch
@@ -391,7 +404,8 @@ class ScribeSynthGenerator(nn.Module):
         self.out = nn.Sequential(
             normalization(ch),
             nn.SiLU(),
-            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
+            zero_module(conv_nd(dims, model_channels,
+                        out_channels, 3, padding=1)),
         )
 
     def forward(self, x, timesteps=None, style=None, freq_input=None, content=None, tag='test', **kwargs):
@@ -400,9 +414,11 @@ class ScribeSynthGenerator(nn.Module):
         emb = self.time_embed(t_emb)
 
         if tag == 'train':
-            context, high_nce_emb, low_nce_emb, confidence = self.mixer(style, freq_input, content)
+            context, high_nce_emb, low_nce_emb, confidence = self.mixer(
+                style, freq_input, content)
         else:
-            context, confidence = self.mixer.generate(style, freq_input, content)
+            context, confidence = self.mixer.generate(
+                style, freq_input, content)
 
         h = x.type(self.dtype)
 

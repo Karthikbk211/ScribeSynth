@@ -12,10 +12,12 @@ class SupConLoss(nn.Module):
         self.base_temperature = base_temperature
 
     def forward(self, features, labels=None, mask=None):
-        device = torch.device('cuda') if features.is_cuda else torch.device('cpu')
+        device = torch.device(
+            'cuda') if features.is_cuda else torch.device('cpu')
 
         if len(features.shape) < 3:
-            raise ValueError('features needs to be [bsz, n_views, ...], at least 3 dimensions required')
+            raise ValueError(
+                'features needs to be [bsz, n_views, ...], at least 3 dimensions required')
         if len(features.shape) > 3:
             features = features.view(features.shape[0], features.shape[1], -1)
 
@@ -28,7 +30,8 @@ class SupConLoss(nn.Module):
         elif labels is not None:
             labels = labels.contiguous().view(-1, 1)
             if labels.shape[0] != batch_size:
-                raise ValueError('Num of labels does not match num of features')
+                raise ValueError(
+                    'Num of labels does not match num of features')
             mask = torch.eq(labels, labels.T).float().to(device)
         else:
             mask = mask.float().to(device)

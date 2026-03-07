@@ -8,14 +8,17 @@ class BasicBlock(nn.Module):
 
     def __init__(self, in_planes, planes, stride=1):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
+                               stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(in_planes, self.expansion * planes,
+                          kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(self.expansion * planes)
             )
 
@@ -42,7 +45,8 @@ class VAE_CNN(nn.Module):
         for module in self.features:
             y = module(y)
         if self.flattening == 'maxpool':
-            y = F.max_pool2d(y, [y.size(2), self.k], stride=[y.size(2), 1], padding=[0, self.k // 2])
+            y = F.max_pool2d(y, [y.size(2), self.k], stride=[
+                             y.size(2), 1], padding=[0, self.k // 2])
         elif self.flattening == 'concat':
             y = y.view(y.size(0), -1, 1, y.size(3))
         return y
@@ -53,18 +57,21 @@ class CNN(nn.Module):
         super(CNN, self).__init__()
         self.k = 1
         self.flattening = flattening
-        self.features = nn.ModuleList([nn.Conv2d(3, 32, 7, [2, 2], 3), nn.ReLU()])
+        self.features = nn.ModuleList(
+            [nn.Conv2d(3, 32, 7, [2, 2], 3), nn.ReLU()])
         in_channels = 32
         cntm = 0
         cnt = 1
         for m in cnn_cfg:
             if m == 'M':
-                self.features.add_module('mxp' + str(cntm), nn.MaxPool2d(kernel_size=2, stride=2))
+                self.features.add_module(
+                    'mxp' + str(cntm), nn.MaxPool2d(kernel_size=2, stride=2))
                 cntm += 1
             else:
                 for i in range(m[0]):
                     x = m[1]
-                    self.features.add_module('cnv' + str(cnt), BasicBlock(in_channels, x))
+                    self.features.add_module(
+                        'cnv' + str(cnt), BasicBlock(in_channels, x))
                     in_channels = x
                     cnt += 1
 
@@ -73,7 +80,8 @@ class CNN(nn.Module):
         for module in self.features:
             y = module(y)
         if self.flattening == 'maxpool':
-            y = F.max_pool2d(y, [y.size(2), self.k], stride=[y.size(2), 1], padding=[0, self.k // 2])
+            y = F.max_pool2d(y, [y.size(2), self.k], stride=[
+                             y.size(2), 1], padding=[0, self.k // 2])
         elif self.flattening == 'concat':
             y = y.view(y.size(0), -1, 1, y.size(3))
         return y
@@ -83,8 +91,10 @@ class CTCHead(nn.Module):
     def __init__(self, input_size, rnn_cfg, nclasses):
         super(CTCHead, self).__init__()
         hidden, num_layers = rnn_cfg
-        self.rec = nn.LSTM(input_size, hidden, num_layers=num_layers, bidirectional=True, dropout=0.2)
-        self.fnl = nn.Sequential(nn.Dropout(0.2), nn.Linear(2 * hidden, nclasses))
+        self.rec = nn.LSTM(
+            input_size, hidden, num_layers=num_layers, bidirectional=True, dropout=0.2)
+        self.fnl = nn.Sequential(nn.Dropout(
+            0.2), nn.Linear(2 * hidden, nclasses))
 
     def forward(self, x):
         y = x.permute(2, 3, 0, 1)[0]

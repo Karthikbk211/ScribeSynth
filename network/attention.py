@@ -12,9 +12,12 @@ def _get_clones(module, N):
 
 
 def _get_activation_fn(activation):
-    if activation == "relu":  return F.relu
-    if activation == "gelu":  return F.gelu
-    if activation == "glu":   return F.glu
+    if activation == "relu":
+        return F.relu
+    if activation == "gelu":
+        return F.gelu
+    if activation == "glu":
+        return F.glu
     raise RuntimeError(f"activation must be relu/gelu/glu, got {activation}")
 
 
@@ -127,7 +130,8 @@ class TransformerDecoderLayer(nn.Module):
                  activation="relu", normalize_before=False):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
-        self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.multihead_attn = nn.MultiheadAttention(
+            d_model, nhead, dropout=dropout)
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.linear2 = nn.Linear(dim_feedforward, d_model)
         self.norm1 = nn.LayerNorm(d_model)
@@ -203,7 +207,8 @@ class CrossAttention(nn.Module):
         self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
         self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
         self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
-        self.to_out = nn.Sequential(nn.Linear(inner_dim, query_dim), nn.Dropout(dropout))
+        self.to_out = nn.Sequential(
+            nn.Linear(inner_dim, query_dim), nn.Dropout(dropout))
 
     def forward(self, x, context=None, mask=None):
         h = self.heads
@@ -213,7 +218,8 @@ class CrossAttention(nn.Module):
         v = self.to_v(context)
 
         from einops import rearrange
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h).contiguous(), (q, k, v))
+        q, k, v = map(lambda t: rearrange(
+            t, 'b n (h d) -> (b h) n d', h=h).contiguous(), (q, k, v))
 
         from torch import einsum
         sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
@@ -264,10 +270,14 @@ class PositionalEncoding2D(nn.Module):
                              -(math.log(10000.0) / d_model_half))
         pos_w = torch.arange(0., width).unsqueeze(1)
         pos_h = torch.arange(0., height).unsqueeze(1)
-        pe[0:d_model_half:2, :, :] = torch.sin(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
-        pe[1:d_model_half:2, :, :] = torch.cos(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
-        pe[d_model_half::2, :, :] = torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
-        pe[d_model_half + 1::2, :, :] = torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
+        pe[0:d_model_half:2, :, :] = torch.sin(
+            pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
+        pe[1:d_model_half:2, :, :] = torch.cos(
+            pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
+        pe[d_model_half::2, :, :] = torch.sin(
+            pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
+        pe[d_model_half + 1::2, :, :] = torch.cos(
+            pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
         pe = pe.unsqueeze(0)
         super().__init__()
         self.register_buffer('pe', pe)
@@ -286,12 +296,15 @@ class SpatialTransformer(nn.Module):
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
         self.norm = nn.GroupNorm(32, in_channels, eps=1e-6, affine=True)
-        self.proj_in = nn.Conv2d(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
+        self.proj_in = nn.Conv2d(
+            in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
         self.transformer_blocks = nn.ModuleList([
-            BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim)
+            BasicTransformerBlock(inner_dim, n_heads, d_head,
+                                  dropout=dropout, context_dim=context_dim)
             for _ in range(depth)
         ])
-        self.proj_out = nn.Conv2d(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
+        self.proj_out = nn.Conv2d(
+            inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
         for p in self.proj_out.parameters():
             p.detach().zero_()
 
@@ -312,11 +325,13 @@ class SpatialTransformer(nn.Module):
 class BasicTransformerBlock(nn.Module):
     def __init__(self, dim, n_heads, d_head, dropout=0., context_dim=None, gated_ff=True):
         super().__init__()
-        self.attn1 = CrossAttention(query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout)
+        self.attn1 = CrossAttention(
+            query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout)
         self.attn2 = CrossAttention(query_dim=dim, context_dim=context_dim,
                                     heads=n_heads, dim_head=d_head, dropout=dropout)
         inner_dim = int(dim * 4)
-        self.ff = nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(inner_dim, dim))
+        self.ff = nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU(
+        ), nn.Dropout(dropout), nn.Linear(inner_dim, dim))
         self.norm1 = nn.LayerNorm(dim)
         self.norm2 = nn.LayerNorm(dim)
         self.norm3 = nn.LayerNorm(dim)

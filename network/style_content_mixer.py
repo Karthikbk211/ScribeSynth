@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from network.attention import (TransformerEncoderLayer, TransformerEncoder,
-                                TransformerDecoderLayer, TransformerDecoder,
-                                PositionalEncoding1D, PositionalEncoding2D)
+                               TransformerDecoderLayer, TransformerDecoder,
+                               PositionalEncoding1D, PositionalEncoding2D)
 from network.feature_extractor import resnet18 as resnet18_dilation, LearnableFrequencyFilter
 from einops import rearrange
 
@@ -18,10 +18,12 @@ class StyleContentMixer(nn.Module):
                                                 dropout, activation, normalize_before)
 
         style_norm = nn.LayerNorm(d_model) if normalize_before else None
-        self.style_encoder = TransformerEncoder(encoder_layer, num_encoder_layers, style_norm)
+        self.style_encoder = TransformerEncoder(
+            encoder_layer, num_encoder_layers, style_norm)
 
         freq_norm = nn.LayerNorm(d_model) if normalize_before else None
-        self.freq_encoder = TransformerEncoder(encoder_layer, num_encoder_layers, freq_norm)
+        self.freq_encoder = TransformerEncoder(
+            encoder_layer, num_encoder_layers, freq_norm)
 
         decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
                                                 dropout, activation, normalize_before)
@@ -35,11 +37,15 @@ class StyleContentMixer(nn.Module):
                                                return_intermediate=return_intermediate_dec)
 
         self.add_position1D = PositionalEncoding1D(dropout=0.1, dim=d_model)
-        self.add_position2D = PositionalEncoding2D(dropout=0.1, d_model=d_model)
+        self.add_position2D = PositionalEncoding2D(
+            dropout=0.1, d_model=d_model)
 
-        self.high_proj = nn.Sequential(nn.Linear(512, 4096), nn.GELU(), nn.Linear(4096, 256))
-        self.low_proj = nn.Sequential(nn.Linear(512, 4096), nn.GELU(), nn.Linear(4096, 256))
-        self.low_feature_filter = nn.Sequential(nn.Linear(512, 1), nn.Sigmoid())
+        self.high_proj = nn.Sequential(
+            nn.Linear(512, 4096), nn.GELU(), nn.Linear(4096, 256))
+        self.low_proj = nn.Sequential(
+            nn.Linear(512, 4096), nn.GELU(), nn.Linear(4096, 256))
+        self.low_feature_filter = nn.Sequential(
+            nn.Linear(512, 1), nn.Sigmoid())
 
         self._reset_parameters()
 
@@ -68,7 +74,8 @@ class StyleContentMixer(nn.Module):
 
     def _init_resnet18(self):
         resnet = models.resnet18(weights='ResNet18_Weights.DEFAULT')
-        resnet.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        resnet.conv1 = nn.Conv2d(1, 64, kernel_size=7,
+                                 stride=2, padding=3, bias=False)
         resnet.layer4 = nn.Identity()
         resnet.fc = nn.Identity()
         resnet.avgpool = nn.Identity()
@@ -127,7 +134,8 @@ class StyleContentMixer(nn.Module):
 
         content = rearrange(content, 'n t h w -> (n t) 1 h w').contiguous()
         content = self.content_encoder(content)
-        content = rearrange(content, '(n t) c h w -> t n (c h w)', n=style.shape[0]).contiguous()
+        content = rearrange(
+            content, '(n t) c h w -> t n (c h w)', n=style.shape[0]).contiguous()
         content = self.add_position1D(content)
 
         style_hs = self.decoder(content, anchor_low_feat, tgt_mask=None)
@@ -154,7 +162,8 @@ class StyleContentMixer(nn.Module):
 
         content = rearrange(content, 'n t h w -> (n t) 1 h w').contiguous()
         content = self.content_encoder(content)
-        content = rearrange(content, '(n t) c h w -> t n (c h w)', n=style.shape[0]).contiguous()
+        content = rearrange(
+            content, '(n t) c h w -> t n (c h w)', n=style.shape[0]).contiguous()
         content = self.add_position1D(content)
 
         style_hs = self.decoder(content, anchor_low_feat, tgt_mask=None)

@@ -47,7 +47,8 @@ class Diffusion:
 
     def noise_images(self, x, t):
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None]
-        sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
+        sqrt_one_minus_alpha_hat = torch.sqrt(
+            1 - self.alpha_hat[t])[:, None, None, None]
         eps = torch.randn_like(x) + self.noise_offset * torch.randn(
             x.shape[0], x.shape[1], 1, 1).to(self.device)
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * eps, eps
@@ -58,7 +59,8 @@ class Diffusion:
 
     def train_ddim(self, model, x, styles, freq_input, content, total_t, sampling_timesteps=50, eta=0):
         total_timesteps = total_t
-        times = [-1] + [i / sampling_timesteps for i in range(1, sampling_timesteps + 1)]
+        times = [-1] + [i /
+                        sampling_timesteps for i in range(1, sampling_timesteps + 1)]
         times = list(reversed(times))
         time_pairs = list(zip(times[:-1], times[1:]))
 
@@ -76,13 +78,15 @@ class Diffusion:
             alpha_hat = self.alpha_hat[time][:, None, None, None]
             alpha_hat_next = self.alpha_hat[time_next][:, None, None, None]
 
-            x_start = (x - (1 - alpha_hat).sqrt() * predicted_noise) / alpha_hat.sqrt()
+            x_start = (x - (1 - alpha_hat).sqrt() *
+                       predicted_noise) / alpha_hat.sqrt()
 
             if time_next[0] < 0:
                 x = x_start
                 continue
 
-            sigma = eta * (beta * (1 - alpha_hat_next) / (1 - alpha_hat)).sqrt()
+            sigma = eta * (beta * (1 - alpha_hat_next) /
+                           (1 - alpha_hat)).sqrt()
             c = (1 - alpha_hat_next - sigma ** 2).sqrt()
             noise = torch.randn_like(x)
 
@@ -95,7 +99,8 @@ class Diffusion:
         model.eval()
 
         total_timesteps = self.noise_steps
-        times = torch.linspace(-1, total_timesteps - 1, steps=sampling_timesteps + 1)
+        times = torch.linspace(-1, total_timesteps - 1,
+                               steps=sampling_timesteps + 1)
         times = list(reversed(times.int().tolist()))
         time_pairs = list(zip(times[:-1], times[1:]))
 
@@ -103,19 +108,22 @@ class Diffusion:
             time = (torch.ones(n) * time).long().to(self.device)
             time_next = (torch.ones(n) * time_next).long().to(self.device)
 
-            predicted_noise, confidence = model(x, time, styles, freq_input, content)
+            predicted_noise, confidence = model(
+                x, time, styles, freq_input, content)
 
             beta = self.beta[time][:, None, None, None]
             alpha_hat = self.alpha_hat[time][:, None, None, None]
             alpha_hat_next = self.alpha_hat[time_next][:, None, None, None]
 
-            x_start = (x - (1 - alpha_hat).sqrt() * predicted_noise) / alpha_hat.sqrt()
+            x_start = (x - (1 - alpha_hat).sqrt() *
+                       predicted_noise) / alpha_hat.sqrt()
 
             if time_next[0] < 0:
                 x = x_start
                 continue
 
-            sigma = eta * (beta * (1 - alpha_hat_next) / (1 - alpha_hat)).sqrt()
+            sigma = eta * (beta * (1 - alpha_hat_next) /
+                           (1 - alpha_hat)).sqrt()
             c = (1 - alpha_hat_next - sigma ** 2).sqrt()
             noise = torch.randn_like(x)
 
@@ -138,7 +146,8 @@ class Diffusion:
 
         for i in tqdm(reversed(range(0, self.noise_steps)), position=1, leave=False, desc='sampling'):
             time = (torch.ones(n) * i).long().to(self.device)
-            predicted_noise, confidence = model(x, time, styles, freq_input, content)
+            predicted_noise, confidence = model(
+                x, time, styles, freq_input, content)
 
             alpha = self.alpha[time][:, None, None, None]
             alpha_hat = self.alpha_hat[time][:, None, None, None]
