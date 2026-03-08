@@ -108,15 +108,24 @@ The model uses the VAE from Stable Diffusion v1.5. It is downloaded automaticall
 ### Stage 1 — Train from scratch
 
 ```bash
-python -m torch.distributed.launch --nproc_per_node=1 train.py \
+torchrun --nproc_per_node=1 train.py \
     --cfg configs/IAM_scratch.yml \
+    --device cuda
+```
+
+### Resume from checkpoint
+
+```bash
+torchrun --nproc_per_node=1 train.py \
+    --cfg configs/IAM_scratch.yml \
+    --resume checkpoints/scribesynth_step15000.pth \
     --device cuda
 ```
 
 ### Stage 2 — Fine-tune with recognition loss
 
 ```bash
-python -m torch.distributed.launch --nproc_per_node=1 train_finetune.py \
+torchrun --nproc_per_node=1 train_finetune.py \
     --cfg configs/IAM_finetune.yml \
     --pretrained checkpoints/scribesynth_step50000.pth \
     --ocr_model model_zoo/text_recognizer.pth \
@@ -128,7 +137,7 @@ python -m torch.distributed.launch --nproc_per_node=1 train_finetune.py \
 ## Generation
 
 ```bash
-python -m torch.distributed.launch --nproc_per_node=1 test.py \
+torchrun --nproc_per_node=1 test.py \
     --cfg configs/IAM_scratch.yml \
     --pretrained checkpoints/scribesynth_final.pth \
     --generate_type iv_s \
@@ -163,7 +172,8 @@ Generation types:
 - Python 3.9
 - PyTorch 2.0.1
 - CUDA 11.7
-- 15GB+ GPU VRAM recommended (tested on NVIDIA T4)
+- 8GB+ GPU VRAM minimum (tested on NVIDIA RTX 4060 8GB)
+- Recommended: set `IMS_PER_BATCH: 2` in config for 8GB GPUs
 
 ---
 
