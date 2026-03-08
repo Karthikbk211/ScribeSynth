@@ -8,7 +8,7 @@ import torchvision
 class Trainer:
     def __init__(self, diffusion, model, vae, criterion, optimizer,
                  train_loader, logs, test_loader, device,
-                 ocr_model=None, ctc_loss=None):
+                 ocr_model=None, ctc_loss=None, max_steps=200000):
         self.diffusion = diffusion
         self.model = model
         self.vae = vae
@@ -23,6 +23,9 @@ class Trainer:
         self.global_step = 0
         self.save_every = 5000
         self.sample_every = 2000
+        self.max_steps = max_steps
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_steps, eta_min=1e-6)
 
     def encode_with_vae(self, imgs):
         with torch.no_grad():
@@ -38,7 +41,9 @@ class Trainer:
 
     def save_checkpoint(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        torch.save(self.model.state_dict(), path)
+        # Unwrap DDP so checkpoint keys don't have 'module.' prefix
+        model_to_save = self.model.module if hasattr(self.model, 'module') else self.model
+        torch.save(model_to_save.state_dict(), path)
         print(f'checkpoint saved to {path}')
 
     def train_step(self, batch):
@@ -65,11 +70,15 @@ class Trainer:
         total_loss = recon_loss + 0.1 * nce_loss
 
         if self.ocr_model is not None:
-            x_start = self.diffusion.predict_start_from_noise(noisy_latents, t, predicted_noise)
-            generated_imgs = self.decode_with_vae(x_start)
-            generated_imgs = (generated_imgs / 2 + 0.5).clamp(0, 1)
+            # Inline x_start recovery (predict_start_from_noise equivalent)
+            alpha_hat = self.diffusion.alpha_hat[t][:, None, None, None]
+            x_start = (noisy_latents - (1 - alpha_hat).sqrt() * predicted_noise) / alpha_hat.sqrt()
 
+            # Detach from the diffusion grad graph before decoding;
+            # OCR loss must not backprop through the frozen VAE or OCR model.
             with torch.no_grad():
+                generated_imgs = self.decode_with_vae(x_start.detach())
+                generated_imgs = (generated_imgs / 2 + 0.5).clamp(0, 1)
                 ocr_input = generated_imgs.mean(dim=1, keepdim=True)
                 ocr_input = ocr_input.repeat(1, 4, 1, 1)
 
@@ -86,29 +95,35 @@ class Trainer:
         self.model.train()
         epoch = 0
 
-        while True:
+        while self.global_step < self.max_steps:
             epoch += 1
             self.train_loader.sampler.set_epoch(epoch)
             pbar = tqdm(self.train_loader, desc=f'Epoch {epoch}')
 
             for batch in pbar:
+                if self.global_step >= self.max_steps:
+                    break
                 self.optimizer.zero_grad()
                 total_loss, recon_loss, nce_loss = self.train_step(batch)
                 total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 self.optimizer.step()
+                self.scheduler.step()
                 self.global_step += 1
 
+                current_lr = self.scheduler.get_last_lr()[0]
                 pbar.set_postfix({
                     'total': f'{total_loss.item():.4f}',
                     'recon': f'{recon_loss.item():.4f}',
-                    'nce': f'{nce_loss.item():.4f}'
+                    'nce': f'{nce_loss.item():.4f}',
+                    'lr': f'{current_lr:.2e}'
                 })
 
                 if self.logs is not None:
                     self.logs.info(
                         f'step {self.global_step} | total: {total_loss.item():.4f} '
-                        f'| recon: {recon_loss.item():.4f} | nce: {nce_loss.item():.4f}')
+                        f'| recon: {recon_loss.item():.4f} | nce: {nce_loss.item():.4f} '
+                        f'| lr: {current_lr:.2e}')
 
                 if self.global_step % self.save_every == 0:
                     self.save_checkpoint(
