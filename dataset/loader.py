@@ -166,8 +166,9 @@ class IAMDataset(Dataset):
                 style_ref[idx, :, :, 0:w] = item['style']
                 freq_ref[idx, :, :, 0:w] = item['freq']
             else:
-                style_ref[idx, :, :, 0:w] = item['style'][:, :, :self.style_len]
-                freq_ref[idx, :, :, 0:w] = item['freq'][:, :, :self.style_len]
+                clamped_w = min(w, self.style_len)
+                style_ref[idx, :, :, 0:clamped_w] = item['style'][:, :, :clamped_w]
+                freq_ref[idx, :, :, 0:clamped_w] = item['freq'][:, :, :clamped_w]
 
         wid = torch.tensor([item['wid'] for item in batch])
         content_ref = 1.0 - content_ref
