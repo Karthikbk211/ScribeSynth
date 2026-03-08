@@ -14,26 +14,29 @@ class StyleContentMixer(nn.Module):
                  return_intermediate_dec=False, normalize_before=True):
         super(StyleContentMixer, self).__init__()
 
-        encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
-                                                dropout, activation, normalize_before)
-
+        # Separate encoder layer instances so style and freq branches have independent weights
+        style_encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
+                                                      dropout, activation, normalize_before)
         style_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.style_encoder = TransformerEncoder(
-            encoder_layer, num_encoder_layers, style_norm)
+            style_encoder_layer, num_encoder_layers, style_norm)
 
+        freq_encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
+                                                     dropout, activation, normalize_before)
         freq_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.freq_encoder = TransformerEncoder(
-            encoder_layer, num_encoder_layers, freq_norm)
+            freq_encoder_layer, num_encoder_layers, freq_norm)
 
         decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
                                                 dropout, activation, normalize_before)
-
         decoder_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                           return_intermediate=return_intermediate_dec)
 
+        freq_decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
+                                                     dropout, activation, normalize_before)
         freq_decoder_norm = nn.LayerNorm(d_model) if normalize_before else None
-        self.freq_decoder = TransformerDecoder(decoder_layer, num_decoder_layers, freq_decoder_norm,
+        self.freq_decoder = TransformerDecoder(freq_decoder_layer, num_decoder_layers, freq_decoder_norm,
                                                return_intermediate=return_intermediate_dec)
 
         self.add_position1D = PositionalEncoding1D(dropout=0.1, dim=d_model)
@@ -47,8 +50,12 @@ class StyleContentMixer(nn.Module):
         self.low_feature_filter = nn.Sequential(
             nn.Linear(512, 1), nn.Sigmoid())
 
+        # Reset only the transformer/projection parameters — must happen BEFORE
+        # pretrained CNN modules are assigned so Xavier init doesn't overwrite them.
         self._reset_parameters()
 
+        # Pretrained CNN encoders assigned after _reset_parameters so their
+        # weights are not overwritten by Xavier initialisation above.
         self.style_encoder_cnn = self._init_resnet18()
         self.style_dilation = resnet18_dilation().conv5_x
 
