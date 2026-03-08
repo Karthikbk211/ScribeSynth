@@ -1,4 +1,5 @@
 import argparse
+import os
 from parse_config import cfg, cfg_from_file, assert_and_infer_cfg
 from dataset.loader import IAMDataset
 import torch
@@ -77,7 +78,7 @@ def main(opt):
         context_dim=cfg.MODEL.EMB_DIM).to(device)
 
     if len(opt.pretrained) > 0:
-        model.load_state_dict(torch.load(opt.pretrained, map_location='cpu'))
+        model.load_state_dict(torch.load(opt.pretrained, map_location='cpu', weights_only=True))
         print(f'loaded pretrained model from {opt.pretrained}')
 
     model = DDP(model, device_ids=[local_rank])
@@ -101,7 +102,6 @@ def main(opt):
 
 
 if __name__ == '__main__':
-    import os
     parser = argparse.ArgumentParser()
     parser.add_argument('--stable_dif_path', type=str,
                         default='runwayml/stable-diffusion-v1-5')

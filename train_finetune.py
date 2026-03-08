@@ -81,7 +81,7 @@ def main(opt):
         context_dim=cfg.MODEL.EMB_DIM).to(device)
 
     if len(opt.pretrained) > 0:
-        model.load_state_dict(torch.load(opt.pretrained, map_location='cpu'))
+        model.load_state_dict(torch.load(opt.pretrained, map_location='cpu', weights_only=True))
         print(f'loaded pretrained model from {opt.pretrained}')
     else:
         print('no pretrained model loaded, exiting')
@@ -97,7 +97,7 @@ def main(opt):
     ocr_model = TextRecognizer(nclasses=len(letters), vae=True)
     if len(opt.ocr_model) > 0:
         ocr_model.load_state_dict(
-            torch.load(opt.ocr_model, map_location='cpu'), strict=False)
+            torch.load(opt.ocr_model, map_location='cpu', weights_only=True), strict=False)
         print(f'loaded ocr model from {opt.ocr_model}')
     else:
         print('no ocr model loaded, exiting')

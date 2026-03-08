@@ -74,7 +74,7 @@ def main(opt):
         context_dim=cfg.MODEL.EMB_DIM).to(opt.device)
 
     if len(opt.pretrained) > 0:
-        model.load_state_dict(torch.load(opt.pretrained, map_location='cpu'))
+        model.load_state_dict(torch.load(opt.pretrained, map_location='cpu', weights_only=True))
         print(f'loaded model from {opt.pretrained}')
     else:
         raise IOError('please provide a valid checkpoint path via --pretrained')
@@ -132,7 +132,7 @@ def main(opt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', dest='cfg_file', default='configs/CVL.yml')
+    parser.add_argument('--cfg', dest='cfg_file', default='configs/IAM_scratch.yml')
     parser.add_argument('--dir', dest='save_dir', default='Generated')
     parser.add_argument('--pretrained', dest='pretrained', default='', required=True)
     parser.add_argument('--generate_type', dest='generate_type', required=True,
