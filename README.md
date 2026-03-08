@@ -1,6 +1,6 @@
 # ScribeSynth
 
-A one-shot sentence-level handwriting generation model trained on the CVL dataset. Given a single handwriting sample from a writer, ScribeSynth generates realistic handwriting in that writer's style for any input text.
+A one-shot sentence-level handwriting generation model trained on the IAM Handwriting Database. Given a single handwriting sample from a writer, ScribeSynth generates realistic handwriting in that writer's style for any input text.
 
 ---
 
@@ -11,7 +11,7 @@ ScribeSynth is inspired by one-shot diffusion based handwriting generation. It e
 - **Sentence-level generation** — supports full sentences instead of just words
 - **Learnable high-frequency filter** — replaces the fixed Laplacian kernel with a trainable CNN that learns what stroke details are most useful for style capture
 - **Style confidence score** — outputs a confidence score indicating how well the generated handwriting matches the input style
-- **IAM dataset support** — trained on the IAM handwriting dataset
+- **IAM dataset support** — trained on the IAM Handwriting Database
 
 ---
 
@@ -20,8 +20,8 @@ ScribeSynth is inspired by one-shot diffusion based handwriting generation. It e
 ```
 ScribeSynth/
 ├── configs/               # YAML configuration files
-│   ├── CVL_scratch.yml    # config for training from scratch
-│   └── CVL_finetune.yml   # config for fine-tuning
+│   ├── IAM_scratch.yml    # config for training from scratch
+│   └── IAM_finetune.yml   # config for fine-tuning
 ├── dataset/               # dataset loading
 │   └── loader.py
 ├── engine/                # training loop
@@ -61,32 +61,44 @@ conda env create -f environment.yml
 conda activate scribesynth
 ```
 
-### 3. Download the CVL dataset
+### 3. Download the IAM Handwriting Database
 
-Request access and download from the [CVL Database](https://cvl.tuwien.ac.at/research/cvl-databases/an-off-line-database-for-writer-retrieval-writer-identification-and-word-spotting/).
+The IAM dataset is available on Kaggle:
 
-Organize the data as follows:
+> [IAM Handwriting Database — Kaggle](https://www.kaggle.com/datasets/nibinv23/iam-handwriting-word-database)
+
+After downloading and extracting, organize the data as follows:
+
 ```
 data/
 ├── images/
 │   ├── train/
+│   │   └── <writer_id>/
+│   │       └── <image>.png
 │   └── test/
+│       └── <writer_id>/
+│           └── <image>.png
 ├── style/
 │   ├── train/
 │   └── test/
 ├── freq/
 │   ├── train/
 │   └── test/
-├── CVL_train.txt
-└── CVL_test.txt
+├── IAM_train.txt
+└── IAM_test.txt
 ```
 
-### 4. Download pretrained VAE
+Each line in `IAM_train.txt` / `IAM_test.txt` should follow the format:
+```
+<writer_id>,<image_name> <transcription>
+```
 
-The model uses the VAE from Stable Diffusion v1.5:
+### 4. Pretrained VAE
+
+The model uses the VAE from Stable Diffusion v1.5. It is downloaded automatically when you run `train.py` (requires a stable internet connection):
+
 ```bash
-# this is downloaded automatically when you run train.py
-# just make sure you have a stable internet connection
+# downloaded automatically from huggingface.co/runwayml/stable-diffusion-v1-5
 ```
 
 ---
@@ -97,7 +109,7 @@ The model uses the VAE from Stable Diffusion v1.5:
 
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 train.py \
-    --cfg configs/CVL_scratch.yml \
+    --cfg configs/IAM_scratch.yml \
     --device cuda
 ```
 
@@ -105,7 +117,7 @@ python -m torch.distributed.launch --nproc_per_node=1 train.py \
 
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 train_finetune.py \
-    --cfg configs/CVL_finetune.yml \
+    --cfg configs/IAM_finetune.yml \
     --pretrained checkpoints/scribesynth_step50000.pth \
     --ocr_model model_zoo/text_recognizer.pth \
     --device cuda
@@ -117,7 +129,7 @@ python -m torch.distributed.launch --nproc_per_node=1 train_finetune.py \
 
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 test.py \
-    --cfg configs/CVL.yml \
+    --cfg configs/IAM_scratch.yml \
     --pretrained checkpoints/scribesynth_final.pth \
     --generate_type iv_s \
     --sample_method ddim \
@@ -161,4 +173,4 @@ This project is inspired by the One-DM (One-shot Diffusion Mimicker) paper:
 
 > One-Shot Diffusion Mimicker for Handwritten Text Generation. arXiv:2409.04004
 
-The CVL dataset is provided by TU Wien.
+The IAM Handwriting Database is provided by the Research Group on Computer Vision and Artificial Intelligence, University of Bern.
