@@ -1,6 +1,6 @@
 # ScribeSynth
 
-A one-shot sentence-level handwriting generation model trained on the IAM Handwriting Database. Given a single handwriting sample from a writer, ScribeSynth generates realistic handwriting in that writer's style for any input text.
+A one-shot handwriting generation model trained on the IAM Handwriting Database (word-level). Given a single handwriting sample from a writer, ScribeSynth generates realistic handwriting in that writer's style for any input text.
 
 ---
 
@@ -8,10 +8,10 @@ A one-shot sentence-level handwriting generation model trained on the IAM Handwr
 
 ScribeSynth is inspired by one-shot diffusion based handwriting generation. It extends existing approaches with:
 
-- **Sentence-level generation** — supports full sentences instead of just words
+- **Extended sequence architecture** — supports up to 32 characters (vs 9 in One-DM), designed to scale beyond word-level generation
 - **Learnable high-frequency filter** — replaces the fixed Laplacian kernel with a trainable CNN that learns what stroke details are most useful for style capture
 - **Style confidence score** — outputs a confidence score indicating how well the generated handwriting matches the input style
-- **IAM dataset support** — trained on the IAM Handwriting Database
+- **IAM dataset support** — trained on the IAM Handwriting Database (word-level crops)
 
 ---
 
@@ -55,6 +55,8 @@ cd ScribeSynth
 ```
 
 ### 2. Create the environment
+
+Open **Anaconda Prompt** and run:
 
 ```bash
 conda env create -f environment.yml
@@ -105,30 +107,36 @@ The model uses the VAE from Stable Diffusion v1.5. It is downloaded automaticall
 
 ## Training
 
+> **Note:** Use `python -m torch.distributed.run` instead of `torchrun` — `torchrun` may fail on some Windows/Anaconda setups.
+
 ### Stage 1 — Train from scratch
 
+Open **Anaconda Prompt**, activate the environment, then run:
+
 ```bash
-torchrun --nproc_per_node=1 train.py \
-    --cfg configs/IAM_scratch.yml \
+conda activate scribesynth
+
+python -m torch.distributed.run --nproc_per_node=1 train.py ^
+    --cfg configs/IAM_scratch.yml ^
     --device cuda
 ```
 
 ### Resume from checkpoint
 
 ```bash
-torchrun --nproc_per_node=1 train.py \
-    --cfg configs/IAM_scratch.yml \
-    --resume checkpoints/scribesynth_step15000.pth \
+python -m torch.distributed.run --nproc_per_node=1 train.py ^
+    --cfg configs/IAM_scratch.yml ^
+    --resume checkpoints/scribesynth_step155000.pth ^
     --device cuda
 ```
 
 ### Stage 2 — Fine-tune with recognition loss
 
 ```bash
-torchrun --nproc_per_node=1 train_finetune.py \
-    --cfg configs/IAM_finetune.yml \
-    --pretrained checkpoints/scribesynth_step50000.pth \
-    --ocr_model model_zoo/text_recognizer.pth \
+python -m torch.distributed.run --nproc_per_node=1 train_finetune.py ^
+    --cfg configs/IAM_finetune.yml ^
+    --pretrained checkpoints/scribesynth_step200000.pth ^
+    --ocr_model model_zoo/text_recognizer.pth ^
     --device cuda
 ```
 
@@ -137,11 +145,11 @@ torchrun --nproc_per_node=1 train_finetune.py \
 ## Generation
 
 ```bash
-torchrun --nproc_per_node=1 test.py \
-    --cfg configs/IAM_scratch.yml \
-    --pretrained checkpoints/scribesynth_final.pth \
-    --generate_type iv_s \
-    --sample_method ddim \
+python -m torch.distributed.run --nproc_per_node=1 test.py ^
+    --cfg configs/IAM_scratch.yml ^
+    --pretrained checkpoints/scribesynth_final.pth ^
+    --generate_type iv_s ^
+    --sample_method ddim ^
     --dir Generated
 ```
 
@@ -155,11 +163,11 @@ Generation types:
 
 ## How It Works
 
-1. **Style encoding** — two handwriting samples from the same writer are passed through two parallel ResNet18 encoders. One captures low-frequency style (overall slant, weight, spacing) and the other captures high-frequency details (stroke edges, curves) through a learnable filter.
+1. **Style encoding** — a handwriting sample from the writer is passed through a ResNet18 encoder. One branch captures low-frequency style (overall slant, weight, spacing) and the other captures high-frequency details (stroke edges, curves) through a learnable frequency filter.
 
 2. **Content encoding** — the desired text is rendered as unifont bitmap images and encoded through a ResNet18.
 
-3. **Style-content fusion** — a transformer decoder fuses the content with style features in two stages — first low frequency, then high frequency.
+3. **Style-content fusion** — a transformer decoder fuses the content with style features in two stages — first low frequency, then high frequency. A confidence head (MLP 256→128→1) outputs a style confidence score.
 
 4. **Diffusion generation** — the fused style-content context guides a UNet to denoise a random latent into a clean handwriting image over 50 DDIM steps.
 
