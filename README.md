@@ -191,4 +191,4 @@ This project is inspired by the One-DM (One-shot Diffusion Mimicker) paper:
 
 > One-Shot Diffusion Mimicker for Handwritten Text Generation. arXiv:2409.04004
 
-The IAM Handwriting Database is provided by the Research Group on Computer Vision and Artificial Intelligence, University of Bern.
+The IAM dataset used in this project was sourced from Kaggle: [nibinv23/iam-handwriting-word-database](https://www.kaggle.com/datasets/nibinv23/iam-handwriting-word-database).
