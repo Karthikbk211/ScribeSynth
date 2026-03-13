@@ -126,7 +126,7 @@ class IAMDataset(Dataset):
             'content': label,
             'style': style_ref,
             'freq': freq_ref,
-            'wid': int(wr_id),
+            'wid': wr_id,
             'transcr': transcr,
             'image_name': image_name
         }
@@ -170,7 +170,8 @@ class IAMDataset(Dataset):
                 style_ref[idx, :, :, 0:clamped_w] = item['style'][:, :, :clamped_w]
                 freq_ref[idx, :, :, 0:clamped_w] = item['freq'][:, :, :clamped_w]
 
-        wid = torch.tensor([item['wid'] for item in batch])
+        # Handle alphanumeric IAM string IDs by hashing to int
+        wid = torch.tensor([hash(item['wid']) % 1000000 if isinstance(item['wid'], str) else item['wid'] for item in batch])
         content_ref = 1.0 - content_ref
         return {
             'img': imgs, 'style': style_ref, 'content': content_ref,
@@ -197,7 +198,7 @@ class Random_StyleIAMDataset(IAMDataset):
             style_ref = style_list[index]
             style_image = cv2.imread(os.path.join(self.style_path, wr_id, style_ref), flags=0)
             freq_image = cv2.imread(os.path.join(self.freq_path, wr_id, style_ref), flags=0)
-            if style_image.shape[1] > 128:
+            if style_image is not None and style_image.shape[1] > 128:
                 break
         style_image = style_image / 255.0
         freq_image = freq_image / 255.0

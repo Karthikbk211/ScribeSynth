@@ -43,8 +43,43 @@ class Trainer:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         # Unwrap DDP so checkpoint keys don't have 'module.' prefix
         model_to_save = self.model.module if hasattr(self.model, 'module') else self.model
-        torch.save(model_to_save.state_dict(), path)
+        state = {
+            'model': model_to_save.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'scheduler': self.scheduler.state_dict(),
+            'global_step': self.global_step
+        }
+        torch.save(state, path)
         print(f'checkpoint saved to {path}')
+
+    def load_checkpoint(self, path):
+        print(f'loading checkpoint from {path}...')
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+        
+        # Determine if it's a "weights-only" old checkpoint or a new "full-state" one
+        if isinstance(checkpoint, dict) and 'model' in checkpoint:
+            model_to_load = self.model.module if hasattr(self.model, 'module') else self.model
+            model_to_load.load_state_dict(checkpoint['model'])
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+            self.scheduler.load_state_dict(checkpoint['scheduler'])
+            self.global_step = checkpoint['global_step']
+            print(f'resumed from step {self.global_step}')
+        else:
+            # Fallback for older checkpoints that were just state_dicts
+            model_to_load = self.model.module if hasattr(self.model, 'module') else self.model
+            model_to_load.load_state_dict(checkpoint)
+            # Try to infer global_step from filename if possible
+            import re
+            match = re.search(r'step(\d+)', path)
+            if match:
+                self.global_step = int(match.group(1))
+                # Adjust scheduler to catch up
+                print(f'inferred step {self.global_step} from filename; advancing scheduler...')
+                for _ in range(self.global_step):
+                    self.scheduler.step()
+            else:
+                print('warning: could not infer step from filename, starting from step 0')
+
 
     def train_step(self, batch):
         imgs = batch['img'].to(self.device)
@@ -93,12 +128,15 @@ class Trainer:
 
     def train(self):
         self.model.train()
-        epoch = 0
+        # Resume epoch count based on current global_step
+        epoch = self.global_step // len(self.train_loader)
 
         while self.global_step < self.max_steps:
             epoch += 1
-            self.train_loader.sampler.set_epoch(epoch)
+            if hasattr(self.train_loader.sampler, 'set_epoch'):
+                self.train_loader.sampler.set_epoch(epoch)
             pbar = tqdm(self.train_loader, desc=f'Epoch {epoch}')
+
 
             for batch in pbar:
                 if self.global_step >= self.max_steps:
@@ -128,6 +166,11 @@ class Trainer:
                 if self.global_step % self.save_every == 0:
                     self.save_checkpoint(
                         f'checkpoints/scribesynth_step{self.global_step}.pth')
+                    # Auto-delete previous checkpoint to save disk space
+                    old_path = f'checkpoints/scribesynth_step{self.global_step - self.save_every}.pth'
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                        print(f'deleted old checkpoint: {old_path}')
 
                 if self.global_step % self.sample_every == 0:
                     self.sample_and_save(batch)
