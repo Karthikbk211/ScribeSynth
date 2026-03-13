@@ -50,26 +50,80 @@ class IAMDataset(Dataset):
     def load_data(self, data_path):
         with open(data_path, 'r') as f:
             train_data = f.readlines()
-            train_data = [i.strip().split(' ') for i in train_data]
-            full_dict = {}
-            idx = 0
-            for i in train_data:
-                s_id = i[0].split(',')[0]
-                image = i[0].split(',')[1] + '.png'
-                transcription = i[1]
-                if len(transcription) > self.max_len:
-                    continue
-                full_dict[idx] = {'image': image, 's_id': s_id, 'label': transcription}
-                idx += 1
+
+        full_dict = {}
+        idx = 0
+        skipped_no_transcription = 0
+        skipped_too_long = 0
+        skipped_invalid_chars = 0
+
+        for line in train_data:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Split on first space only — handles transcriptions with spaces
+            parts = line.split(' ', 1)
+
+            # Skip lines with no transcription
+            if len(parts) < 2:
+                skipped_no_transcription += 1
+                continue
+
+            meta = parts[0]
+            transcription = parts[1].strip()
+
+            # Skip empty transcriptions
+            if not transcription:
+                skipped_no_transcription += 1
+                continue
+
+            # Parse writer_id and image name
+            meta_parts = meta.split(',')
+            if len(meta_parts) < 2:
+                skipped_no_transcription += 1
+                continue
+
+            s_id = meta_parts[0]
+            image = meta_parts[1] + '.png'
+
+            # Skip transcriptions that are too long
+            if len(transcription) > self.max_len:
+                skipped_too_long += 1
+                continue
+
+            # Skip transcriptions with characters not in our alphabet
+            if any(c not in self.letter2index for c in transcription):
+                skipped_invalid_chars += 1
+                continue
+
+            full_dict[idx] = {'image': image, 's_id': s_id, 'label': transcription}
+            idx += 1
+
+        print(f"[Dataset] Loaded {idx} samples")
+        print(f"[Dataset] Skipped - no transcription: {skipped_no_transcription}")
+        print(f"[Dataset] Skipped - too long (>{self.max_len} chars): {skipped_too_long}")
+        print(f"[Dataset] Skipped - invalid characters: {skipped_invalid_chars}")
+
         return full_dict
 
     def get_style_ref(self, wr_id):
         style_list = os.listdir(os.path.join(self.style_path, wr_id))
         style_index = random.sample(range(len(style_list)), 2)
-        style_images = [cv2.imread(os.path.join(self.style_path, wr_id, style_list[i]), flags=0)
-                        for i in style_index]
-        freq_images = [cv2.imread(os.path.join(self.freq_path, wr_id, style_list[i]), flags=0)
-                       for i in style_index]
+
+        style_images = []
+        freq_images = []
+        for i in style_index:
+            s_img = cv2.imread(os.path.join(self.style_path, wr_id, style_list[i]), flags=0)
+            f_img = cv2.imread(os.path.join(self.freq_path, wr_id, style_list[i]), flags=0)
+            # Skip None images gracefully
+            if s_img is None or f_img is None:
+                # fallback: try another random image
+                fallback = random.choice([j for j in range(len(style_list)) if j != i])
+                s_img = cv2.imread(os.path.join(self.style_path, wr_id, style_list[fallback]), flags=0)
+                f_img = cv2.imread(os.path.join(self.freq_path, wr_id, style_list[fallback]), flags=0)
+            style_images.append(s_img)
+            freq_images.append(f_img)
 
         height = style_images[0].shape[0]
         max_w = max([img.shape[1] for img in style_images])
@@ -170,7 +224,6 @@ class IAMDataset(Dataset):
                 style_ref[idx, :, :, 0:clamped_w] = item['style'][:, :, :clamped_w]
                 freq_ref[idx, :, :, 0:clamped_w] = item['freq'][:, :, :clamped_w]
 
-        # Handle alphanumeric IAM string IDs by hashing to int
         wid = torch.tensor([hash(item['wid']) % 1000000 if isinstance(item['wid'], str) else item['wid'] for item in batch])
         content_ref = 1.0 - content_ref
         return {
@@ -198,7 +251,10 @@ class Random_StyleIAMDataset(IAMDataset):
             style_ref = style_list[index]
             style_image = cv2.imread(os.path.join(self.style_path, wr_id, style_ref), flags=0)
             freq_image = cv2.imread(os.path.join(self.freq_path, wr_id, style_ref), flags=0)
-            if style_image is not None and style_image.shape[1] > 128:
+            # Skip None images
+            if style_image is None or freq_image is None:
+                continue
+            if style_image.shape[1] > 128:
                 break
         style_image = style_image / 255.0
         freq_image = freq_image / 255.0
