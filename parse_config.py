@@ -11,7 +11,7 @@ cfg.DATA_LOADER = edict()
 cfg.DATA_LOADER.IMAGE_PATH = 'data/images'
 cfg.DATA_LOADER.STYLE_PATH = 'data/style'
 cfg.DATA_LOADER.FREQ_PATH = 'data/freq'
-cfg.DATA_LOADER.NUM_THREADS = 4
+cfg.DATA_LOADER.NUM_THREADS = 8
 
 # -----------------------------------------------------------------------
 # Model
@@ -28,21 +28,21 @@ cfg.MODEL.NUM_HEADS = 8
 # -----------------------------------------------------------------------
 cfg.TRAIN = edict()
 cfg.TRAIN.SEED = 42
-cfg.TRAIN.IMS_PER_BATCH = 8
+cfg.TRAIN.IMS_PER_BATCH = 32  # Optimized for H200
 cfg.TRAIN.TYPE = 'train'
 
 # -----------------------------------------------------------------------
 # Testing
 # -----------------------------------------------------------------------
 cfg.TEST = edict()
-cfg.TEST.IMS_PER_BATCH = 4
+cfg.TEST.IMS_PER_BATCH = 48   # Optimized for H200
 cfg.TEST.TYPE = 'test'
 
 # -----------------------------------------------------------------------
 # Solver
 # -----------------------------------------------------------------------
 cfg.SOLVER = edict()
-cfg.SOLVER.BASE_LR = 1e-4
+cfg.SOLVER.BASE_LR = 3e-5
 
 # -----------------------------------------------------------------------
 # Output

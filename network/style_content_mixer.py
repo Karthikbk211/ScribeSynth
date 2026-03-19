@@ -44,11 +44,14 @@ class StyleContentMixer(nn.Module):
             dropout=0.1, d_model=d_model)
 
         self.high_proj = nn.Sequential(
-            nn.Linear(512, 4096), nn.GELU(), nn.Linear(4096, 256))
+            nn.Linear(d_model, 4096), nn.GELU(), nn.Linear(4096, 256))
         self.low_proj = nn.Sequential(
-            nn.Linear(512, 4096), nn.GELU(), nn.Linear(4096, 256))
+            nn.Linear(d_model, 4096), nn.GELU(), nn.Linear(4096, 256))
         self.low_feature_filter = nn.Sequential(
-            nn.Linear(512, 1), nn.Sigmoid())
+            nn.Linear(d_model, 1), nn.Sigmoid())
+
+        self.style_proj = nn.Conv2d(512, d_model, kernel_size=1) if d_model != 512 else nn.Identity()
+        self.freq_proj = nn.Conv2d(512, d_model, kernel_size=1) if d_model != 512 else nn.Identity()
 
         # Reset only the transformer/projection parameters — must happen BEFORE
         # pretrained CNN modules are assigned so Xavier init doesn't overwrite them.
@@ -67,6 +70,7 @@ class StyleContentMixer(nn.Module):
             *([nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)] +
               list(models.resnet18(weights='ResNet18_Weights.DEFAULT').children())[1:-2])
         )
+        self.content_proj = nn.Conv2d(512, d_model, kernel_size=1) if d_model != 512 else nn.Identity()
 
         self.confidence_head = nn.Sequential(
             nn.Linear(256, 128),
@@ -88,10 +92,11 @@ class StyleContentMixer(nn.Module):
         resnet.avgpool = nn.Identity()
         return resnet
 
-    def _extract_style_feature(self, encoder_cnn, dilation, x, position2D, transformer_encoder):
+    def _extract_style_feature(self, encoder_cnn, dilation, proj, x, position2D, transformer_encoder):
         x = encoder_cnn(x)
         x = rearrange(x, 'n (c h w) -> n c h w', c=256, h=4).contiguous()
         x = dilation(x)
+        x = proj(x)
         x = position2D(x)
         x = rearrange(x, 'n c h w -> (h w) n c').contiguous()
         x = transformer_encoder(x)
@@ -99,13 +104,13 @@ class StyleContentMixer(nn.Module):
 
     def _get_low_freq_feature(self, style):
         return self._extract_style_feature(
-            self.style_encoder_cnn, self.style_dilation,
+            self.style_encoder_cnn, self.style_dilation, self.style_proj,
             style, self.add_position2D, self.style_encoder)
 
     def _get_high_freq_feature(self, x):
         x = self.freq_filter(x)
         return self._extract_style_feature(
-            self.freq_encoder_cnn, self.freq_dilation,
+            self.freq_encoder_cnn, self.freq_dilation, self.freq_proj,
             x, self.add_position2D, self.freq_encoder)
 
     def forward(self, style, freq_input, content):
@@ -141,6 +146,7 @@ class StyleContentMixer(nn.Module):
 
         content = rearrange(content, 'n t h w -> (n t) 1 h w').contiguous()
         content = self.content_encoder(content)
+        content = self.content_proj(content)
         content = rearrange(
             content, '(n t) c h w -> t n (c h w)', n=style.shape[0]).contiguous()
         content = self.add_position1D(content)
@@ -169,6 +175,7 @@ class StyleContentMixer(nn.Module):
 
         content = rearrange(content, 'n t h w -> (n t) 1 h w').contiguous()
         content = self.content_encoder(content)
+        content = self.content_proj(content)
         content = rearrange(
             content, '(n t) c h w -> t n (c h w)', n=style.shape[0]).contiguous()
         content = self.add_position1D(content)

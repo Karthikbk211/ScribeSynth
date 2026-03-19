@@ -26,7 +26,8 @@ def main(opt):
     assert_and_infer_cfg()
     fix_seed(cfg.TRAIN.SEED)
 
-    dist.init_process_group(backend='nccl')
+    backend = 'gloo' if os.name == 'nt' else 'nccl'
+    dist.init_process_group(backend=backend)
     local_rank = dist.get_rank()
     torch.cuda.set_device(local_rank)
 
@@ -143,6 +144,6 @@ if __name__ == '__main__':
     parser.add_argument('--sampling_timesteps', type=int, default=50)
     parser.add_argument('--sample_method', type=str, default='ddim')
     parser.add_argument('--eta', type=float, default=0.0)
-    parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument('--local_rank', '--local-rank', type=int, default=0)
     opt = parser.parse_args()
     main(opt)

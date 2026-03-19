@@ -3,6 +3,9 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 import torchvision
+import copy
+from parse_config import cfg
+from network.diffusion import EMA
 
 
 class Trainer:
@@ -26,6 +29,12 @@ class Trainer:
         self.max_steps = max_steps
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=max_steps, eta_min=1e-6)
+        
+        self.scaler = torch.cuda.amp.GradScaler()
+        self.ema = EMA(0.9999)
+        self.ema_model = copy.deepcopy(model.module if hasattr(model, 'module') else model).to(self.device)
+        self.ema_model.requires_grad_(False)
+        self.ema_model.eval()
 
     def encode_with_vae(self, imgs):
         with torch.no_grad():
@@ -45,8 +54,10 @@ class Trainer:
         model_to_save = self.model.module if hasattr(self.model, 'module') else self.model
         state = {
             'model': model_to_save.state_dict(),
+            'ema_model': self.ema_model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'scheduler': self.scheduler.state_dict(),
+            'scaler': self.scaler.state_dict(),
             'global_step': self.global_step
         }
         torch.save(state, path)
@@ -60,8 +71,12 @@ class Trainer:
         if isinstance(checkpoint, dict) and 'model' in checkpoint:
             model_to_load = self.model.module if hasattr(self.model, 'module') else self.model
             model_to_load.load_state_dict(checkpoint['model'])
+            if 'ema_model' in checkpoint:
+                self.ema_model.load_state_dict(checkpoint['ema_model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.scheduler.load_state_dict(checkpoint['scheduler'])
+            if 'scaler' in checkpoint:
+                self.scaler.load_state_dict(checkpoint['scaler'])
             self.global_step = checkpoint['global_step']
             print(f'resumed from step {self.global_step}')
         else:
@@ -94,15 +109,16 @@ class Trainer:
                                             finetune=self.ocr_model is not None).to(self.device)
         noisy_latents, noise = self.diffusion.noise_images(latents, t)
 
-        predicted_noise, high_nce_emb, low_nce_emb, confidence = self.model(
-            noisy_latents, t, style, freq, content, tag='train')
+        with torch.cuda.amp.autocast():
+            predicted_noise, high_nce_emb, low_nce_emb, confidence = self.model(
+                noisy_latents, t, style, freq, content, tag='train')
 
-        recon_loss = self.criterion['recon'](predicted_noise, noise)
-        high_nce_loss = self.criterion['nce'](high_nce_emb)
-        low_nce_loss = self.criterion['nce'](low_nce_emb)
-        nce_loss = high_nce_loss + low_nce_loss
+            recon_loss = self.criterion['recon'](predicted_noise, noise)
+            high_nce_loss = self.criterion['nce'](high_nce_emb)
+            low_nce_loss = self.criterion['nce'](low_nce_emb)
+            nce_loss = high_nce_loss + low_nce_loss
 
-        total_loss = recon_loss + 0.1 * nce_loss
+            total_loss = recon_loss + 0.1 * nce_loss
 
         if self.ocr_model is not None:
             # Inline x_start recovery (predict_start_from_noise equivalent)
@@ -117,12 +133,13 @@ class Trainer:
                 ocr_input = generated_imgs.mean(dim=1, keepdim=True)
                 ocr_input = ocr_input.repeat(1, 4, 1, 1)
 
-            ocr_output = self.ocr_model(ocr_input)
-            ocr_output = ocr_output.log_softmax(2)
-            input_lengths = torch.full((ocr_output.shape[1],),
-                                       ocr_output.shape[0], dtype=torch.long).to(self.device)
-            ctc = self.ctc_loss(ocr_output, target, input_lengths, target_lengths)
-            total_loss = total_loss + 0.1 * ctc
+            with torch.cuda.amp.autocast():
+                ocr_output = self.ocr_model(ocr_input)
+                ocr_output = ocr_output.log_softmax(2)
+                input_lengths = torch.full((ocr_output.shape[1],),
+                                           ocr_output.shape[0], dtype=torch.long).to(self.device)
+                ctc = self.ctc_loss(ocr_output, target, input_lengths, target_lengths)
+                total_loss = total_loss + 0.1 * ctc
 
         return total_loss, recon_loss, nce_loss
 
@@ -143,11 +160,17 @@ class Trainer:
                     break
                 self.optimizer.zero_grad()
                 total_loss, recon_loss, nce_loss = self.train_step(batch)
-                total_loss.backward()
+                self.scaler.scale(total_loss).backward()
+                self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                self.optimizer.step()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
                 self.scheduler.step()
                 self.global_step += 1
+                
+                # Update EMA
+                model_to_ema = self.model.module if hasattr(self.model, 'module') else self.model
+                self.ema.step_ema(self.ema_model, model_to_ema)
 
                 current_lr = self.scheduler.get_last_lr()[0]
                 pbar.set_postfix({
@@ -165,9 +188,9 @@ class Trainer:
 
                 if self.global_step % self.save_every == 0:
                     self.save_checkpoint(
-                        f'checkpoints/scribesynth_step{self.global_step}.pth')
-                    # Auto-delete previous checkpoint to save disk space
-                    old_path = f'checkpoints/scribesynth_step{self.global_step - self.save_every}.pth'
+                        f'{cfg.OUTPUT_DIR}/checkpoints/scribesynth_step{self.global_step}.pth')
+                    # Keep multiple checkpoints: delete the one 3 saves ago (keep at least 3)
+                    old_path = f'{cfg.OUTPUT_DIR}/checkpoints/scribesynth_step{self.global_step - self.save_every * 3}.pth'
                     if os.path.exists(old_path):
                         os.remove(old_path)
                         print(f'deleted old checkpoint: {old_path}')
@@ -186,10 +209,10 @@ class Trainer:
                          (content.shape[1] * 32) // 8)).to(self.device)
 
         sampled, confidence = self.diffusion.ddim_sample(
-            self.model, self.vae, 1, x, style, freq, content)
+            self.ema_model, self.vae, 1, x, style, freq, content)
 
-        os.makedirs('samples', exist_ok=True)
+        os.makedirs(f'{cfg.OUTPUT_DIR}/samples', exist_ok=True)
         torchvision.utils.save_image(
-            sampled, f'samples/step_{self.global_step}.png')
+            sampled, f'{cfg.OUTPUT_DIR}/samples/step_{self.global_step}.png')
 
         self.model.train()

@@ -32,8 +32,12 @@ def main(opt):
     assert_and_infer_cfg()
     fix_seed(cfg.TRAIN.SEED)
 
-    dist.init_process_group(backend='nccl')
-    local_rank = dist.get_rank()
+    backend = 'gloo' if os.name == 'nt' else 'nccl'
+    # Set master addr/port explicitly for Windows compatibility
+    os.environ.setdefault('MASTER_ADDR', '127.0.0.1')
+    os.environ.setdefault('MASTER_PORT', '29500')
+    dist.init_process_group(backend=backend)
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
     torch.cuda.set_device(local_rank)
     device = torch.device(opt.device, local_rank)
 
@@ -52,6 +56,8 @@ def main(opt):
         collate_fn=train_dataset.collate_fn_,
         num_workers=cfg.DATA_LOADER.NUM_THREADS,
         pin_memory=True,
+        prefetch_factor=3,
+        persistent_workers=True,
         sampler=train_sampler)
 
     test_dataset = IAMDataset(
@@ -68,6 +74,8 @@ def main(opt):
         collate_fn=test_dataset.collate_fn_,
         pin_memory=True,
         num_workers=cfg.DATA_LOADER.NUM_THREADS,
+        prefetch_factor=3,
+        persistent_workers=True,
         sampler=test_sampler)
 
     model = ScribeSynthGenerator(
@@ -87,7 +95,7 @@ def main(opt):
         print('no pretrained model loaded, exiting')
         exit()
 
-    model = DDP(model, device_ids=[local_rank], broadcast_buffers=False)
+    model = DDP(model, device_ids=[local_rank], broadcast_buffers=False, find_unused_parameters=True)
     optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.BASE_LR)
 
     criterion = dict(nce=SupConLoss(contrast_mode='all'), recon=nn.MSELoss())
@@ -116,7 +124,20 @@ def main(opt):
     trainer = Trainer(diffusion, model, vae, criterion, optimizer,
                       train_loader, logs, test_loader, device,
                       ocr_model=ocr_model, ctc_loss=ctc_loss)
+
+    if len(opt.resume) > 0:
+        trainer.load_checkpoint(opt.resume)
+    else:
+        import glob
+        import re
+        checkpoints = glob.glob(f'{cfg.OUTPUT_DIR}/checkpoints/scribesynth_step*.pth')
+        if checkpoints:
+            latest = max(checkpoints, key=lambda x: int(re.search(r'step(\d+)', x).group(1)) if re.search(r'step(\d+)', x) else -1)
+            print(f"Auto-resuming from latest checkpoint found: {latest}")
+            trainer.load_checkpoint(latest)
+
     trainer.train()
+
 
 
 if __name__ == '__main__':
@@ -127,10 +148,12 @@ if __name__ == '__main__':
                         default='configs/IAM_finetune.yml')
     parser.add_argument('--pretrained', default='',
                         help='pretrained ScribeSynth model path')
+    parser.add_argument('--resume', default='', help='path to checkpoint to resume training')
     parser.add_argument('--ocr_model', dest='ocr_model',
                         default='./model_zoo/text_recognizer.pth')
+
     parser.add_argument('--noise_offset', default=0, type=float)
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument('--local_rank', '--local-rank', type=int, default=0)
     opt = parser.parse_args()
     main(opt)

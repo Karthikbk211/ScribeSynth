@@ -429,7 +429,10 @@ class ScribeSynthGenerator(nn.Module):
         h = self.middle_block(h, emb, context)
 
         for module in self.output_blocks:
-            h = torch.cat([h, hs.pop()], dim=1)
+            h_skip = hs.pop()
+            if h.shape[2:] != h_skip.shape[2:]:
+                h = torch.nn.functional.interpolate(h, size=h_skip.shape[2:], mode='bilinear', align_corners=False)
+            h = torch.cat([h, h_skip], dim=1)
             h = module(h, emb, context)
 
         h = h.type(x.dtype)
