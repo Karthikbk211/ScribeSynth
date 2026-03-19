@@ -90,6 +90,13 @@ def main(opt):
         print(f'loaded pretrained model from {opt.pretrained}')
 
     model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
+    
+    # Advanced H200 Speedup: JIT Compilation
+    try:
+        model = torch.compile(model)
+        print("Model compiled with torch.compile() for faster execution.")
+    except Exception as e:
+        print(f"Warning: torch.compile() failed (likely Windows/Triton issue), skipping... Error: {e}")
 
     criterion = dict(nce=SupConLoss(contrast_mode='all'), recon=nn.MSELoss())
     optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.BASE_LR)

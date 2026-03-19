@@ -209,7 +209,7 @@ class Trainer:
                          (content.shape[1] * 32) // 8)).to(self.device)
 
         sampled, confidence = self.diffusion.ddim_sample(
-            self.ema_model, self.vae, 1, x, style, freq, content)
+            self.ema_model, self.vae, 1, x, style, freq, content, sampling_timesteps=25)
 
         os.makedirs(f'{cfg.OUTPUT_DIR}/samples', exist_ok=True)
         torchvision.utils.save_image(
